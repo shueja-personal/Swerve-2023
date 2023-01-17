@@ -65,8 +65,6 @@ public class RobotContainer {
                 m_drivebaseS
             )
         );
-
-        m_armS.setDefaultCommand(m_armS.holdC());
         configureButtonBindings();
         PathPlannerTrajectory sCurveTrajectory = PathPlanner.loadPath("StraightBack", 4, 8, false);
         m_field.getObject("traj").setTrajectory((Trajectory) sCurveTrajectory);
@@ -85,10 +83,21 @@ public class RobotContainer {
     public void configureButtonBindings() {
         new Trigger(RobotController::getUserButton).onTrue(runOnce(()->m_drivebaseS.resetPose(new Pose2d())));
         m_driverController.a().toggleOnTrue(m_drivebaseS.chasePoseC(m_target::getPose));
-        m_driverController.povRight().whileTrue(m_armS.retractC());
-        m_driverController.povLeft().whileTrue(m_armS.extendC());
-        m_driverController.povUp().whileTrue(m_armS.counterClockwiseC());
-        m_driverController.povDown().whileTrue(m_armS.clockwiseC());
+        m_driverController.povRight()
+            .or(m_driverController.povDownRight())
+            .or(m_driverController.povUpRight())
+            .whileTrue(m_armS.extendC());
+        m_driverController.povLeft()
+            .or(m_driverController.povDownLeft())
+            .or(m_driverController.povUpLeft())
+            .whileTrue(m_armS.retractC());
+        m_driverController.povUp()
+            .or(m_driverController.povUpLeft())
+            .or(m_driverController.povUpRight())
+            .whileTrue(m_armS.counterClockwiseC());
+        m_driverController.povDown()
+            .or(m_driverController.povDownRight())
+            .or(m_driverController.povDownLeft()).whileTrue(m_armS.clockwiseC());
 
     }
 

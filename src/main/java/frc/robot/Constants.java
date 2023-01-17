@@ -123,8 +123,8 @@ public class Constants {
         public static final double EXTEND_DRUM_ROTATIONS_PER_MOTOR_ROTATION = 1.0/14.667;
         public static final double EXTEND_METERS_PER_DRUM_ROTATION = Math.PI * 2 * EXTEND_DRUM_RADIUS;
 
-        public static final double MIN_ARM_ANGLE = Units.degreesToRadians(-20);
-        public static final double MAX_ARM_ANGLE = Units.degreesToRadians(200);
+        public static final double MIN_ARM_ANGLE = Units.degreesToRadians(-45);
+        public static final double MAX_ARM_ANGLE = Units.degreesToRadians(225);
         public static final double ARM_ROTATIONS_PER_MOTOR_ROTATION = 1.0/400.0;
 
         public static final double ARM_MASS_KG = 20;

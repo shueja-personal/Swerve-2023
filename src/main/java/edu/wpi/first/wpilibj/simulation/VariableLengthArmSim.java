@@ -24,6 +24,8 @@ public class VariableLengthArmSim extends LinearSystemSim<N2, N1, N1> {
   // The length of the arm.
   private double m_r;
 
+  private double m_moi;
+
   // The minimum angle that the arm is capable of.
   private final double m_minAngle;
 
@@ -52,6 +54,7 @@ public class VariableLengthArmSim extends LinearSystemSim<N2, N1, N1> {
       LinearSystem<N2, N1, N1> plant,
       DCMotor gearbox,
       double gearing,
+      double jKgMetersSquared,
       double armLengthMeters,
       double minAngleRads,
       double maxAngleRads,
@@ -61,6 +64,7 @@ public class VariableLengthArmSim extends LinearSystemSim<N2, N1, N1> {
         plant,
         gearbox,
         gearing,
+        jKgMetersSquared,
         armLengthMeters,
         minAngleRads,
         maxAngleRads,
@@ -86,6 +90,7 @@ public class VariableLengthArmSim extends LinearSystemSim<N2, N1, N1> {
       LinearSystem<N2, N1, N1> plant,
       DCMotor gearbox,
       double gearing,
+      double jKgMetersSquared,
       double armLengthMeters,
       double minAngleRads,
       double maxAngleRads,
@@ -95,7 +100,8 @@ public class VariableLengthArmSim extends LinearSystemSim<N2, N1, N1> {
     super(plant, measurementStdDevs);
     m_gearbox = gearbox;
     m_gearing = gearing;
-    m_r = armLengthMeters;
+    m_moi = jKgMetersSquared;
+    m_r = armLengthMeters / 2;
     m_minAngle = minAngleRads;
     m_maxAngle = maxAngleRads;
     m_armMass = armMassKg;
@@ -163,7 +169,8 @@ public class VariableLengthArmSim extends LinearSystemSim<N2, N1, N1> {
         measurementStdDevs);
     m_gearbox = gearbox;
     m_gearing = gearing;
-    m_r = armLengthMeters;
+    m_moi = jKgMetersSquared;
+    m_r = armLengthMeters / 2;
     m_minAngle = minAngleRads;
     m_maxAngle = maxAngleRads;
     m_armMass = armMassKg;
@@ -248,17 +255,9 @@ public class VariableLengthArmSim extends LinearSystemSim<N2, N1, N1> {
     setInput(volts);
   }
 
-  /**
-   * Calculates a rough estimate of the moment of inertia of an arm given its length and mass.
-   *
-   * @param lengthMeters The length of the arm.
-   * @param massKg The mass of the arm.
-   * @return The calculated moment of inertia.
-   */
-  public static double estimateMOI(double lengthMeters, double massKg) {
-    return 1.0 / 3.0 * massKg * lengthMeters * lengthMeters;
+  public void setCGRadius(double radius) {
+    m_r = radius;
   }
-
   /**
    * Updates the state of the arm.
    *
@@ -289,8 +288,7 @@ public class VariableLengthArmSim extends LinearSystemSim<N2, N1, N1> {
                             m_armMass
                                 * m_r
                                 * -9.8
-                                * 3.0
-                                / (m_armMass * m_r * m_r)
+                                / (m_moi)
                                 * Math.cos(x.get(0, 0))));
               }
               return xdot;
@@ -309,15 +307,14 @@ public class VariableLengthArmSim extends LinearSystemSim<N2, N1, N1> {
     return updatedXhat;
   }
 
-  public void setLength(double lengthMeters) {
-    m_r = lengthMeters;
-    var moi = estimateMOI(m_r, m_armMass);
+  public void setMOI(double moi) {
     // recalculating only the relevant entries in the plant
+    m_moi = moi;
     m_plant.getA().set(1, 1, 
       -m_gearing * m_gearing
       * m_gearbox.KtNMPerAmp
-      / (m_gearbox.KvRadPerSecPerVolt * m_gearbox.rOhms * moi));
+      / (m_gearbox.KvRadPerSecPerVolt * m_gearbox.rOhms * m_moi));
     m_plant.getB().set(1, 0, 
-      m_gearing * m_gearbox.KtNMPerAmp / (m_gearbox.rOhms * moi));
+      m_gearing * m_gearbox.KtNMPerAmp / (m_gearbox.rOhms * m_moi));
   }
 }
