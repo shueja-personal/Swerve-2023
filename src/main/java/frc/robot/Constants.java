@@ -128,6 +128,7 @@ public class Constants {
         public static final double ARM_ROTATIONS_PER_MOTOR_ROTATION = 1.0/400.0;
 
         public static final double ARM_MASS_KG = 20;
+        public static final double ARM_END_MASS_KG = 5;
 
     }
 

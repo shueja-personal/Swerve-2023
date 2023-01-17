@@ -4,6 +4,7 @@ import com.revrobotics.CANSparkMax;
 import com.revrobotics.CANSparkMax.SoftLimitDirection;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 
+import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Transform2d;
@@ -126,6 +127,34 @@ public class ArmS extends SubsystemBase implements Loggable {
 
     public void setPivotVolts(double volts) {
         m_pivotMotor.setVoltage(volts);
+    }
+
+    @Log
+    public double getArmkG() {
+        double minkG = 1.414;
+        double maxkG = 2.872;
+
+        double result = 1.414;
+        double s = (getLengthMeters() - MIN_ARM_LENGTH) / (MAX_ARM_LENGTH - MIN_ARM_LENGTH);
+        result += s * (2.872 - 1.414);
+        return result;
+    }
+
+    /** kG cos (pi/4) = 1
+     * kG = 1/cos(pi/4)
+     * = 2/sqrt2
+     * =sqrt2
+     * 
+     * kG at full retract = 1.414
+     * kG at full extend:
+     * kG cos (10deg) = 2.828
+     * kG = 2.828 / cos (10deg)
+     * =2.872
+     */
+    public Command holdC() {
+        return run(()->
+        setPivotVolts(
+            getArmkG() * getAngle().getCos()));
     }
 
     public Command extendC() {

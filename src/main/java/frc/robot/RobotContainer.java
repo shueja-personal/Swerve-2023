@@ -66,6 +66,7 @@ public class RobotContainer {
             )
         );
 
+        m_armS.setDefaultCommand(m_armS.holdC());
         configureButtonBindings();
         PathPlannerTrajectory sCurveTrajectory = PathPlanner.loadPath("StraightBack", 4, 8, false);
         m_field.getObject("traj").setTrajectory((Trajectory) sCurveTrajectory);
