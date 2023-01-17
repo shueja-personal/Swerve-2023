@@ -311,9 +311,13 @@ public class VariableLengthArmSim extends LinearSystemSim<N2, N1, N1> {
 
   public void setLength(double lengthMeters) {
     m_r = lengthMeters;
-    LinearSystem<N2, N1, N1> newPlant =
-    LinearSystemId.createSingleJointedArmSystem(m_gearbox, estimateMOI(m_r, m_armMass), m_gearing);
-    m_plant.getA().set(1, 1, newPlant.getA(1, 1));
-    m_plant.getB().set(1, 0, newPlant.getB(1, 0));
+    var moi = estimateMOI(m_r, m_armMass);
+    // recalculating only the relevant entries in the plant
+    m_plant.getA().set(1, 1, 
+      -m_gearing * m_gearing
+      * m_gearbox.KtNMPerAmp
+      / (m_gearbox.KvRadPerSecPerVolt * m_gearbox.rOhms * moi));
+    m_plant.getB().set(1, 0, 
+      m_gearing * m_gearbox.KtNMPerAmp / (m_gearbox.rOhms * moi));
   }
 }
