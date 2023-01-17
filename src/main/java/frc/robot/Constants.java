@@ -14,6 +14,7 @@ import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 
 public class Constants {
 
@@ -105,6 +106,28 @@ public class Constants {
         public static final TrapezoidProfile.Constraints NO_CONSTRAINTS = new TrapezoidProfile.Constraints(Integer.MAX_VALUE, Integer.MAX_VALUE);
         public static final TrapezoidProfile.Constraints THETA_DEFAULT_CONSTRAINTS = new TrapezoidProfile.Constraints(4*Math.PI, 16*Math.PI);
     
+
+    }
+
+    public static final class ArmConstants {
+        public static final int PIVOT_MOTOR_ID = 21;
+        public static final int EXTEND_MOTOR_ID = 20;
+
+        //Arm length measured from shoulder pivot to wrist pivot
+        public static final double MIN_ARM_LENGTH = Units.inchesToMeters(25);
+        public static final double MAX_ARM_LENGTH = Units.inchesToMeters(50);
+
+        public static final Translation2d ARM_PIVOT_TRANSLATION = new Translation2d(0, Units.inchesToMeters(25));
+        
+        public static final double EXTEND_DRUM_RADIUS = Units.inchesToMeters(1);
+        public static final double EXTEND_DRUM_ROTATIONS_PER_MOTOR_ROTATION = 1.0/14.667;
+        public static final double EXTEND_METERS_PER_DRUM_ROTATION = Math.PI * 2 * EXTEND_DRUM_RADIUS;
+
+        public static final double MIN_ARM_ANGLE = Units.degreesToRadians(-20);
+        public static final double MAX_ARM_ANGLE = Units.degreesToRadians(200);
+        public static final double ARM_ROTATIONS_PER_MOTOR_ROTATION = 1.0/400.0;
+
+        public static final double ARM_MASS_KG = 20;
 
     }
 

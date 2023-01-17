@@ -25,6 +25,7 @@ import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.Constants.InputDevices;
 import frc.robot.commands.drivetrain.OperatorControlC;
+import frc.robot.subsystems.ArmS;
 import frc.robot.subsystems.DrivebaseS;
 import io.github.oblarg.oblog.annotations.Log;
 
@@ -35,7 +36,9 @@ public class RobotContainer {
      */
 
     private final CommandXboxController m_driverController = new CommandXboxController(InputDevices.GAMEPAD_PORT);
+    
     private final DrivebaseS m_drivebaseS = new DrivebaseS();
+    private final ArmS m_armS = new ArmS();
 
     @Log
     private final Field2d m_field = new Field2d();
@@ -80,13 +83,12 @@ public class RobotContainer {
 
     public void configureButtonBindings() {
         new Trigger(RobotController::getUserButton).onTrue(runOnce(()->m_drivebaseS.resetPose(new Pose2d())));
-        m_driverController.povCenter().onFalse(
-            runOnce(
-                ()->m_drivebaseS.setRotationState(
-                    Units.degreesToRadians(m_driverController.getHID().getPOV()))
-            )
-        );
         m_driverController.a().toggleOnTrue(m_drivebaseS.chasePoseC(m_target::getPose));
+        m_driverController.povRight().whileTrue(m_armS.retractC());
+        m_driverController.povLeft().whileTrue(m_armS.extendC());
+        m_driverController.povUp().whileTrue(m_armS.counterClockwiseC());
+        m_driverController.povDown().whileTrue(m_armS.clockwiseC());
+
     }
 
     public Command getAutonomousCommand() {

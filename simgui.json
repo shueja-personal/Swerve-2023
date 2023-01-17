@@ -1,6 +1,11 @@
 {
   "HALProvider": {
     "Other Devices": {
+      "SPARK MAX [21]": {
+        "header": {
+          "open": true
+        }
+      },
       "navX-Sensor[0]": {
         "header": {
           "open": true
@@ -11,6 +16,8 @@
   "NTProvider": {
     "types": {
       "/FMSInfo": "FMSInfo",
+      "/Shuffleboard/ArmS/ARM_VISUALIZER": "Field2d",
+      "/Shuffleboard/ArmS/VISUALIZER": "Field2d",
       "/Shuffleboard/DrivebaseS/bl": "Subsystem",
       "/Shuffleboard/DrivebaseS/br": "Subsystem",
       "/Shuffleboard/DrivebaseS/fl": "Subsystem",
@@ -28,6 +35,43 @@
       "/SmartDashboard/SendableChooser[0]": "String Chooser"
     },
     "windows": {
+      "/Shuffleboard/ArmS/ARM_VISUALIZER": {
+        "bottom": 206,
+        "height": 1.2192000150680542,
+        "image": "C:\\Users\\jashu\\PathWeaver\\Games\\3mx3m\\FTC_Field_1.png",
+        "left": 206,
+        "right": 423,
+        "top": 12,
+        "width": 1.2192000150680542,
+        "window": {
+          "visible": true
+        }
+      },
+      "/Shuffleboard/ArmS/VISUALIZER": {
+        "0_Pivot": {
+          "length": 0.20000000298023224,
+          "width": 0.20000000298023224
+        },
+        "1_Arm": {
+          "arrowSize": 31,
+          "arrows": false,
+          "style": "Line"
+        },
+        "Robot": {
+          "length": 0.7799999713897705,
+          "width": 0.30000001192092896
+        },
+        "bottom": 206,
+        "height": 1.2192000150680542,
+        "image": "C:\\Users\\jashu\\PathWeaver\\Games\\3mx3m\\FTC_Field_1.png",
+        "left": 206,
+        "right": 423,
+        "top": 12,
+        "width": 1.2192000150680542,
+        "window": {
+          "visible": true
+        }
+      },
       "/Shuffleboard/RobotContainer/field": {
         "BackLeft": {
           "length": 0.4000000059604645,
@@ -201,6 +245,9 @@
         ".recording": {
           "open": true
         },
+        "ArmS": {
+          "open": true
+        },
         "DrivebaseS": {
           "SwerveModule-FL-[18,17]": {
             "open": true
@@ -213,8 +260,7 @@
           },
           "bl": {
             "open": true
-          },
-          "open": true
+          }
         },
         "RobotContainer": {
           "drivebaseS": {
@@ -334,18 +380,24 @@
     "Plot <1>": {
       "plots": [
         {
+          "axis": [
+            {
+              "autoFit": true
+            }
+          ],
           "height": 332,
           "series": [
             {
               "color": [
-                0.2980392277240753,
-                0.44705885648727417,
-                0.6901960968971252,
+                0.8666667342185974,
+                0.5176470875740051,
+                0.32156863808631897,
                 1.0
               ],
-              "id": "NT:/Shuffleboard/RobotContainer/m_lastLoopDuration"
+              "id": "NT:/Shuffleboard/ArmS/getPivotVelocity"
             }
-          ]
+          ],
+          "viewTime": 30.0
         }
       ]
     }
