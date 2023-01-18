@@ -6,6 +6,7 @@ import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.VecBuilder;
+import edu.wpi.first.math.controller.ElevatorFeedforward;
 import edu.wpi.first.math.controller.LinearPlantInversionFeedforward;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.ProfiledPIDController;
@@ -26,6 +27,7 @@ import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj.simulation.ElevatorSim;
 import edu.wpi.first.wpilibj.simulation.SingleJointedArmSim;
+import edu.wpi.first.wpilibj.simulation.TiltedElevatorSim;
 import edu.wpi.first.wpilibj.simulation.VariableLengthArmSim;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -55,14 +57,20 @@ public class ArmS extends SubsystemBase implements Loggable {
     private final LinearSystem<N2, N1, N1> m_extendPlant =
         LinearSystemId.identifyPositionSystem(
             12 / (Units.inchesToMeters(81.2)), 0.01);
-    private final ElevatorSim m_extendSim = new ElevatorSim(
+    private final TiltedElevatorSim m_extendSim = new TiltedElevatorSim(
         m_extendPlant,
         DCMotor.getNEO(1),
         EXTEND_DRUM_ROTATIONS_PER_MOTOR_ROTATION,
         EXTEND_DRUM_RADIUS,
-        MIN_ARM_LENGTH, MAX_ARM_LENGTH, false);
+        MIN_ARM_LENGTH, MAX_ARM_LENGTH, true);
     
-    
+    private final LinearPlantInversionFeedforward<N2,N1,N1> m_extendFeedforward
+        = new LinearPlantInversionFeedforward<>(m_extendPlant, 0.02);
+
+    private final ProfiledPIDController m_extendController =
+        new ProfiledPIDController(5,0,0,
+            new Constraints(2, 4)
+        );
 
     /* PIVOT */
     private final CANSparkMax m_pivotMotor = new CANSparkMax(PIVOT_MOTOR_ID, MotorType.kBrushless);
@@ -92,7 +100,7 @@ public class ArmS extends SubsystemBase implements Loggable {
         = new LinearPlantInversionFeedforward<>(m_pivotPlant, 0.02);
 
     private ProfiledPIDController m_pivotController = new ProfiledPIDController(
-        5, 0, 0, new Constraints(4,1));
+        5, 0, 0, new Constraints(4,4));
 
     private double armStartAngle = 0;
     public ArmS() {
@@ -103,6 +111,7 @@ public class ArmS extends SubsystemBase implements Loggable {
         m_extendMotor.setSoftLimit(SoftLimitDirection.kForward, (float) MAX_ARM_LENGTH);
         m_extendMotor.setSoftLimit(SoftLimitDirection.kReverse, (float) MIN_ARM_LENGTH);
         m_extendEncoderWrapper.setPosition(MIN_ARM_LENGTH);
+        m_extendController.reset(MIN_ARM_LENGTH);
 
 
         m_pivotMotor.getEncoder().setPositionConversionFactor(ARM_ROTATIONS_PER_MOTOR_ROTATION);
@@ -137,6 +146,7 @@ public class ArmS extends SubsystemBase implements Loggable {
     }
 
     public void simulationPeriodic() {
+            m_extendSim.setAngleFromHorizontal(getAngle().getRadians());
             m_extendSim.setInputVoltage(m_extendMotor.getAppliedOutput());
             m_extendSim.update(0.02);
             m_extendEncoderWrapper.setSimPosition(m_extendSim.getPositionMeters());
@@ -179,6 +189,23 @@ public class ArmS extends SubsystemBase implements Loggable {
     public Command retractC() {
         return extendS.run(()->setExtendVolts(-3))
         .finallyDo((interrupted)->setExtendVolts(0));
+    }
+
+    public void setExtendVelocity(double velocityMetersPerSecond) {
+        m_extendMotor.setVoltage(
+            m_extendFeedforward.calculate(
+                VecBuilder.fill(0, getExtendVelocity()),
+                VecBuilder.fill(0, velocityMetersPerSecond)
+            ).get(0,0)
+            + ARM_EXTEND_KG_VERTICAL * Math.sin(getAngle().getRadians())
+        );
+    }
+
+    public void setExtendLength(double lengthMeters) {
+        setExtendVelocity(
+            m_extendController.calculate(getLengthMeters(), lengthMeters)
+            +m_extendController.getSetpoint().velocity
+        );
     }
 
     /* PIVOT */
@@ -227,8 +254,8 @@ public class ArmS extends SubsystemBase implements Loggable {
 
     @Log
     public double getPivotkG() {
-        double minkG = ARM_KG_MIN_EXTEND;
-        double maxkG = ARM_KG_MAX_EXTEND;
+        double minkG = ARM_PIVOT_KG_MIN_EXTEND;
+        double maxkG = ARM_PIVOT_KG_MAX_EXTEND;
 
         double result = minkG;
         double s = (getLengthMeters() - MIN_ARM_LENGTH) / (MAX_ARM_LENGTH - MIN_ARM_LENGTH);
@@ -251,11 +278,13 @@ public class ArmS extends SubsystemBase implements Loggable {
     }
 
     public Command followTargetC() {
-        return pivotS.run(()->{
+        return Commands.run(()->{
             var offset = VISUALIZER.getObject("2_target").getPose().getTranslation();
             offset = new Translation2d(offset.getX(), offset.getY() - Units.inchesToMeters(25));
             setPivotAngle(offset.getAngle().getRadians());
-        });
+            setExtendLength(offset.getNorm());
+        },
+        extendS, pivotS);
     }
 
 
