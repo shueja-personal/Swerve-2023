@@ -4,13 +4,9 @@ import com.revrobotics.CANSparkMax;
 import com.revrobotics.CANSparkMax.SoftLimitDirection;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 
-import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.VecBuilder;
-import edu.wpi.first.math.controller.ElevatorFeedforward;
 import edu.wpi.first.math.controller.LinearPlantInversionFeedforward;
-import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.ProfiledPIDController;
-import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Transform2d;
@@ -21,12 +17,7 @@ import edu.wpi.first.math.system.LinearSystem;
 import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.system.plant.LinearSystemId;
 import edu.wpi.first.math.trajectory.TrapezoidProfile.Constraints;
-import edu.wpi.first.math.trajectory.TrapezoidProfile.State;
 import edu.wpi.first.math.util.Units;
-import edu.wpi.first.wpilibj.DriverStation;
-import edu.wpi.first.wpilibj.RobotBase;
-import edu.wpi.first.wpilibj.simulation.ElevatorSim;
-import edu.wpi.first.wpilibj.simulation.SingleJointedArmSim;
 import edu.wpi.first.wpilibj.simulation.TiltedElevatorSim;
 import edu.wpi.first.wpilibj.simulation.VariableLengthArmSim;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
@@ -44,14 +35,42 @@ import static frc.robot.Constants.ArmConstants.*;
 import java.util.List;
 
 public class ArmS extends SubsystemBase implements Loggable {
-    
-    // We create blank subsystems here to separate hardware requirements
-    private final Subsystem pivotS = new Subsystem() {};
-    private final Subsystem extendS = new Subsystem() {};
     @Log
     public final Field2d VISUALIZER = new Field2d();
 
-    /* EXTENDER */
+    public ArmS() {
+        initExtender();
+        initPivot();
+
+        var pivotPose = new Pose2d(ARM_PIVOT_TRANSLATION, getAngle());
+        VISUALIZER.getObject("2_target").setPose(new Pose2d(
+            pivotPose.getTranslation().plus(new Translation2d(0, MIN_ARM_LENGTH)),
+            pivotPose.getRotation()
+        ));
+    }
+
+    public void periodic() {
+        
+        pivotPeriodic();
+        updateVisualizer();
+    }
+
+    public void updateVisualizer() {
+        var pivotPose = new Pose2d(ARM_PIVOT_TRANSLATION, getAngle());
+        VISUALIZER.getObject("0_Pivot").setPose(pivotPose);
+        VISUALIZER.getObject("1_Arm").setPoses(List.of(pivotPose, pivotPose.transformBy(
+            new Transform2d(new Translation2d(getLengthMeters(), 0), new Rotation2d())
+        )));
+    }
+
+    public void simulationPeriodic() {
+        extendSimulationPeriodic();
+        pivotSimulationPeriodic();
+        
+    }
+
+    // region extend
+    private final Subsystem extendS = new Subsystem() {};
     private final CANSparkMax m_extendMotor = new CANSparkMax(EXTEND_MOTOR_ID, MotorType.kBrushless);
     private final SparkMaxEncoderWrapper m_extendEncoderWrapper = new SparkMaxEncoderWrapper(m_extendMotor);
     private final LinearSystem<N2, N1, N1> m_extendPlant =
@@ -72,7 +91,76 @@ public class ArmS extends SubsystemBase implements Loggable {
             new Constraints(2, 4)
         );
 
-    /* PIVOT */
+    public void initExtender() {
+        m_extendMotor.getEncoder().setPositionConversionFactor(EXTEND_DRUM_ROTATIONS_PER_MOTOR_ROTATION * EXTEND_METERS_PER_DRUM_ROTATION);
+        m_extendMotor.getEncoder().setVelocityConversionFactor(EXTEND_DRUM_ROTATIONS_PER_MOTOR_ROTATION * EXTEND_METERS_PER_DRUM_ROTATION / 60);
+        m_extendMotor.setSoftLimit(SoftLimitDirection.kForward, (float) MAX_ARM_LENGTH);
+        m_extendMotor.setSoftLimit(SoftLimitDirection.kReverse, (float) MIN_ARM_LENGTH);
+        m_extendEncoderWrapper.setPosition(MIN_ARM_LENGTH);
+        m_extendController.reset(MIN_ARM_LENGTH);
+        m_extendSim.setState(VecBuilder.fill(MIN_ARM_LENGTH, 0));
+    }
+
+    public void extendPeriodic(){}
+
+    public void extendSimulationPeriodic() {
+        m_extendSim.setAngleFromHorizontal(getAngle().getRadians());
+        m_extendSim.setInputVoltage(m_extendMotor.getAppliedOutput());
+        m_extendSim.update(0.02);
+        m_extendEncoderWrapper.setSimPosition(m_extendSim.getPositionMeters());
+        m_extendEncoderWrapper.setSimVelocity(m_extendSim.getVelocityMetersPerSecond());
+    }
+
+    public void setExtendVolts(double volts) {
+        m_extendMotor.setVoltage(volts);
+    }
+
+    /**
+     * Returns the distance from the pivot to the wrist joint in meters.
+     * @return
+     */
+    @Log
+    public double getLengthMeters() {
+        return m_extendEncoderWrapper.getPosition();
+    }
+
+    @Log
+    public double getExtendVelocity(){
+        return m_extendEncoderWrapper.getVelocity();
+    }
+
+    public void setExtendVelocity(double velocityMetersPerSecond) {
+        m_extendMotor.setVoltage(
+            m_extendFeedforward.calculate(
+                VecBuilder.fill(0, getExtendVelocity()),
+                VecBuilder.fill(0, velocityMetersPerSecond)
+            ).get(0,0)
+            + ARM_EXTEND_KG_VERTICAL * Math.sin(getAngle().getRadians())
+        );
+    }
+
+    public void setExtendLength(double lengthMeters) {
+        setExtendVelocity(
+            m_extendController.calculate(getLengthMeters(), lengthMeters)
+            +m_extendController.getSetpoint().velocity
+        );
+    }
+
+    public Command extendC() {
+        return extendS.run(()->{setExtendVolts(3);})
+            .finallyDo((interrupted)->setExtendVolts(0));
+    }
+
+    public Command retractC() {
+        return extendS.run(()->setExtendVolts(-3))
+        .finallyDo((interrupted)->setExtendVolts(0));
+    }
+
+    // endregion
+
+    // region pivot
+    private final Subsystem pivotS = new Subsystem() {};
+
     private final CANSparkMax m_pivotMotor = new CANSparkMax(PIVOT_MOTOR_ID, MotorType.kBrushless);
     private final SparkMaxEncoderWrapper m_pivotEncoderWrapper = new SparkMaxEncoderWrapper(m_pivotMotor);
 
@@ -93,9 +181,6 @@ public class ArmS extends SubsystemBase implements Loggable {
         true
     );
 
-    @Log
-    private double m_pivotKV = 0;
-
     private LinearPlantInversionFeedforward<N2, N1, N1> m_pivotFeedForward
         = new LinearPlantInversionFeedforward<>(m_pivotPlant, 0.02);
 
@@ -103,112 +188,35 @@ public class ArmS extends SubsystemBase implements Loggable {
         5, 0, 0, new Constraints(4,4));
 
     private double armStartAngle = 0;
-    public ArmS() {
-        m_extendMotor.getEncoder().setPositionConversionFactor(EXTEND_DRUM_ROTATIONS_PER_MOTOR_ROTATION * EXTEND_METERS_PER_DRUM_ROTATION);
-        m_extendMotor.getEncoder().setVelocityConversionFactor(
-            EXTEND_DRUM_ROTATIONS_PER_MOTOR_ROTATION * EXTEND_METERS_PER_DRUM_ROTATION / 60
-        );
-        m_extendMotor.setSoftLimit(SoftLimitDirection.kForward, (float) MAX_ARM_LENGTH);
-        m_extendMotor.setSoftLimit(SoftLimitDirection.kReverse, (float) MIN_ARM_LENGTH);
-        m_extendEncoderWrapper.setPosition(MIN_ARM_LENGTH);
-        m_extendController.reset(MIN_ARM_LENGTH);
 
-
+    private void initPivot() {
         m_pivotMotor.getEncoder().setPositionConversionFactor(ARM_ROTATIONS_PER_MOTOR_ROTATION);
         m_pivotMotor.getEncoder().setVelocityConversionFactor(ARM_ROTATIONS_PER_MOTOR_ROTATION / 60);
         m_pivotMotor.setSoftLimit(SoftLimitDirection.kForward, (float) MAX_ARM_ANGLE);
         m_pivotMotor.setSoftLimit(SoftLimitDirection.kReverse, (float) MIN_ARM_ANGLE);
+
         m_pivotEncoderWrapper.setPosition(armStartAngle);
         m_pivotSim.setState(VecBuilder.fill(armStartAngle,0));
+
         m_pivotController.reset(armStartAngle);
-        pivotS.setDefaultCommand(followTargetC());
         m_pivotController.enableContinuousInput(-Math.PI, Math.PI);
         m_pivotController.setTolerance(0.05, 0.05);
 
-
-        var pivotPose = new Pose2d(ARM_PIVOT_TRANSLATION, getAngle());
-        VISUALIZER.getObject("2_target").setPose(new Pose2d(
-            pivotPose.getTranslation().plus(new Translation2d(0, MIN_ARM_LENGTH)),
-            pivotPose.getRotation()
-        ));
+        pivotS.setDefaultCommand(followTargetC());
     }
 
-    public void periodic() {
-        //m_pivotKV = m_pivotFeedForward.calculate(VecBuilder.fill(0,1)).get(0,0);
+    private void pivotPeriodic() {
         updatePivotPlant();
         m_pivotFeedForward = new LinearPlantInversionFeedforward<>(m_pivotPlant, 0.02);
-        var pivotPose = new Pose2d(ARM_PIVOT_TRANSLATION, getAngle());
-        VISUALIZER.getObject("0_Pivot").setPose(pivotPose);
-        VISUALIZER.getObject("1_Arm").setPoses(List.of(pivotPose, pivotPose.transformBy(
-            new Transform2d(new Translation2d(getLengthMeters(), 0), new Rotation2d())
-        )));
-
     }
-
-    public void simulationPeriodic() {
-            m_extendSim.setAngleFromHorizontal(getAngle().getRadians());
-            m_extendSim.setInputVoltage(m_extendMotor.getAppliedOutput());
-            m_extendSim.update(0.02);
-            m_extendEncoderWrapper.setSimPosition(m_extendSim.getPositionMeters());
-            m_extendEncoderWrapper.setSimVelocity(m_extendSim.getVelocityMetersPerSecond());
-
-
-            m_pivotSim.setCGRadius(getLengthMeters() / 2);
-            m_pivotSim.setMOI(getPivotMOI());
-            m_pivotSim.setInputVoltage(m_pivotMotor.getAppliedOutput());
-            m_pivotSim.update(0.02);
-            m_pivotEncoderWrapper.setSimPosition(m_pivotSim.getAngleRads());
-            m_pivotEncoderWrapper.setSimVelocity(m_pivotSim.getVelocityRadPerSec());
+    private void pivotSimulationPeriodic() {
+        m_pivotSim.setCGRadius(getLengthMeters() / 2);
+        m_pivotSim.setMOI(getPivotMOI());
+        m_pivotSim.setInputVoltage(m_pivotMotor.getAppliedOutput());
+        m_pivotSim.update(0.02);
+        m_pivotEncoderWrapper.setSimPosition(m_pivotSim.getAngleRads());
+        m_pivotEncoderWrapper.setSimVelocity(m_pivotSim.getVelocityRadPerSec());
     }
-
-    /* EXTEND */
-
-    public void setExtendVolts(double volts) {
-        m_extendMotor.setVoltage(volts);
-    }
-
-    /**
-     * Returns the distance from the pivot to the wrist joint in meters.
-     * @return
-     */
-    @Log
-    public double getLengthMeters() {
-        return m_extendEncoderWrapper.getPosition();
-    }
-
-    @Log
-    public double getExtendVelocity(){
-        return m_extendEncoderWrapper.getVelocity();
-    }
-
-    public Command extendC() {
-        return extendS.run(()->{setExtendVolts(3);})
-            .finallyDo((interrupted)->setExtendVolts(0));
-    }
-
-    public Command retractC() {
-        return extendS.run(()->setExtendVolts(-3))
-        .finallyDo((interrupted)->setExtendVolts(0));
-    }
-
-    public void setExtendVelocity(double velocityMetersPerSecond) {
-        m_extendMotor.setVoltage(
-            m_extendFeedforward.calculate(
-                VecBuilder.fill(0, getExtendVelocity()),
-                VecBuilder.fill(0, velocityMetersPerSecond)
-            ).get(0,0)
-            + ARM_EXTEND_KG_VERTICAL * Math.sin(getAngle().getRadians())
-        );
-    }
-
-    public void setExtendLength(double lengthMeters) {
-        setExtendVelocity(
-            m_extendController.calculate(getLengthMeters(), lengthMeters)
-            +m_extendController.getSetpoint().velocity
-        );
-    }
-
-    /* PIVOT */
 
     public void setPivotVolts(double volts) {
         m_pivotMotor.setVoltage(volts);
@@ -276,7 +284,9 @@ public class ArmS extends SubsystemBase implements Loggable {
         return pivotS.run(()->setPivotVelocity(-0.5))
         .finallyDo((interrupted)->setPivotVolts(0));
     }
+    // endregion
 
+    // region factories
     public Command followTargetC() {
         return Commands.run(()->{
             var offset = VISUALIZER.getObject("2_target").getPose().getTranslation();
@@ -287,5 +297,6 @@ public class ArmS extends SubsystemBase implements Loggable {
         extendS, pivotS);
     }
 
+    // endregion
 
 }
