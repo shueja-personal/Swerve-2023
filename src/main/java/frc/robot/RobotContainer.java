@@ -118,6 +118,8 @@ public class RobotContainer {
         ));
         m_drivebaseS.drawRobotOnField(m_field);
         m_field3d.setRobotPose(new Pose3d(m_drivebaseS.getPose()));
+        m_field3d.getObject("Hand").setPose(
+            new Pose3d(m_drivebaseS.getPose()).transformBy(m_armS.getGamePieceTransform()));
     }
 
     public void onEnabled(){

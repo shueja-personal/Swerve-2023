@@ -9,8 +9,11 @@ import edu.wpi.first.math.controller.LinearPlantInversionFeedforward;
 import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform2d;
+import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N2;
 import edu.wpi.first.math.system.LinearSystem;
@@ -67,6 +70,19 @@ public class ArmS extends SubsystemBase implements Loggable {
         extendSimulationPeriodic();
         pivotSimulationPeriodic();
         
+    }
+
+    public Transform3d getGamePieceTransform() {
+        var pivotPose = new Pose2d(ARM_PIVOT_TRANSLATION, getAngle());
+        var wristPose = pivotPose.transformBy(
+            new Transform2d(new Translation2d(getLengthMeters(), 0), new Rotation2d())
+        );
+        var piecePose = wristPose.transformBy(new Transform2d(new Translation2d(HAND_LENGTH / 2, 0), new Rotation2d()));
+        var transform3d = new Transform3d(
+            new Translation3d(piecePose.getX(), 0, piecePose.getY()),
+            new Rotation3d(0, -piecePose.getRotation().getRadians() ,0)
+        );
+        return transform3d;
     }
 
     // region extend

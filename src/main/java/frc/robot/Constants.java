@@ -131,11 +131,16 @@ public class Constants {
         public static final double ARM_ROTATIONS_PER_MOTOR_ROTATION = 1.0/400.0;
 
         public static final double ARM_MASS_KG = 20;
-        public static final double ARM_END_MASS_KG = 5;
+        
 
         public static final int PIVOT_MOTOR_ID = 21;
         public static final double ARM_PIVOT_KG_MIN_EXTEND = 1.414 / 2 / Math.cos(Units.degreesToRadians(10.5));
         public static final double ARM_PIVOT_KG_MAX_EXTEND = 2.872 / 2 / Math.cos(Units.degreesToRadians(10.5));
+
+        /* WRIST/HAND */
+
+        public static final double HAND_LENGTH = Units.inchesToMeters(10);
+        public static final double HAND_MASS_KG = 5;
 
         
     }
