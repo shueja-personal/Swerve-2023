@@ -60,10 +60,16 @@ public class ArmS extends SubsystemBase implements Loggable {
 
     public void updateVisualizer() {
         var pivotPose = new Pose2d(ARM_PIVOT_TRANSLATION, getAngle());
-        VISUALIZER.getObject("0_Pivot").setPose(pivotPose);
-        VISUALIZER.getObject("1_Arm").setPoses(List.of(pivotPose, pivotPose.transformBy(
+        var wristPose = pivotPose.transformBy(
             new Transform2d(new Translation2d(getLengthMeters(), 0), new Rotation2d())
-        )));
+        );
+        var handPose = wristPose.transformBy(new Transform2d(new Translation2d(), new Rotation2d()));
+        var handEndPose = handPose.transformBy(
+            new Transform2d(new Translation2d(HAND_LENGTH, 0), new Rotation2d())
+        );
+        VISUALIZER.getObject("0_Pivot").setPose(pivotPose);
+        VISUALIZER.getObject("1_Arm").setPoses(List.of(pivotPose, wristPose));
+        VISUALIZER.getObject("2_Hand").setPoses(List.of(handPose, handEndPose));
     }
 
     public void simulationPeriodic() {

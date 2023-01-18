@@ -69,18 +69,29 @@
           "selectable": false,
           "style": "Line"
         },
+        "2_Hand": {
+          "arrows": false,
+          "color": [
+            0.11162741482257843,
+            0.1412261575460434,
+            0.6962025165557861,
+            255.0
+          ],
+          "selectable": false,
+          "style": "Line"
+        },
         "Robot": {
           "length": 0.7799999713897705,
           "selectable": false,
           "width": 0.30000001192092896
         },
         "bottom": 206,
-        "height": 1.2192000150680542,
+        "height": 2.0,
         "image": "C:\\Users\\jashu\\PathWeaver\\Games\\3mx3m\\FTC_Field_1.png",
         "left": 206,
         "right": 423,
         "top": 12,
-        "width": 1.2192000150680542,
+        "width": 2.0,
         "window": {
           "visible": true
         }
