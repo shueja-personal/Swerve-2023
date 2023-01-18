@@ -33,7 +33,7 @@ public class TiltedElevatorSim extends LinearSystemSim<N2, N1, N1> {
   // Whether the simulator should simulate gravity.
   private final boolean m_simulateGravity;
 
-  private double m_angleFromHorizontal;
+  private double m_angleFromHorizontal = Math.PI / 2;
 
   /**
    * Creates a simulated elevator mechanism.

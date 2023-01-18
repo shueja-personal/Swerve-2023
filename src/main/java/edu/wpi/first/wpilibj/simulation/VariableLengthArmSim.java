@@ -4,6 +4,7 @@
 
 package edu.wpi.first.wpilibj.simulation;
 
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.numbers.N1;
@@ -37,6 +38,8 @@ public class VariableLengthArmSim extends LinearSystemSim<N2, N1, N1> {
 
   // Whether the simulator should simulate gravity.
   private final boolean m_simulateGravity;
+
+  private double m_gravityAngle = -Math.PI/2;
 
   /**
    * Creates a simulated arm mechanism.
@@ -289,7 +292,7 @@ public class VariableLengthArmSim extends LinearSystemSim<N2, N1, N1> {
                                 * m_r
                                 * -9.8
                                 / (m_moi)
-                                * Math.cos(x.get(0, 0))));
+                                * Math.sin(x.get(0, 0) - m_gravityAngle)));
               }
               return xdot;
             },
@@ -316,5 +319,9 @@ public class VariableLengthArmSim extends LinearSystemSim<N2, N1, N1> {
       / (m_gearbox.KvRadPerSecPerVolt * m_gearbox.rOhms * m_moi));
     m_plant.getB().set(1, 0, 
       m_gearing * m_gearbox.KtNMPerAmp / (m_gearbox.rOhms * m_moi));
+  }
+
+  public void setGravityAngle(double angleRadians) {
+    m_gravityAngle = MathUtil.angleModulus(angleRadians);
   }
 }

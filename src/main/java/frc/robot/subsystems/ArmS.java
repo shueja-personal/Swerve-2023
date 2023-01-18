@@ -4,6 +4,7 @@ import com.revrobotics.CANSparkMax;
 import com.revrobotics.CANSparkMax.SoftLimitDirection;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.controller.LinearPlantInversionFeedforward;
 import edu.wpi.first.math.controller.ProfiledPIDController;
@@ -21,6 +22,8 @@ import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.system.plant.LinearSystemId;
 import edu.wpi.first.math.trajectory.TrapezoidProfile.Constraints;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj.simulation.TiltedElevatorSim;
 import edu.wpi.first.wpilibj.simulation.VariableLengthArmSim;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
@@ -44,6 +47,7 @@ public class ArmS extends SubsystemBase implements Loggable {
     public ArmS() {
         initExtender();
         initPivot();
+        initWrist();
 
         var pivotPose = new Pose2d(ARM_PIVOT_TRANSLATION, getAngle());
         VISUALIZER.getObject("2_target").setPose(new Pose2d(
@@ -63,7 +67,7 @@ public class ArmS extends SubsystemBase implements Loggable {
         var wristPose = pivotPose.transformBy(
             new Transform2d(new Translation2d(getLengthMeters(), 0), new Rotation2d())
         );
-        var handPose = wristPose.transformBy(new Transform2d(new Translation2d(), new Rotation2d()));
+        var handPose = wristPose.transformBy(new Transform2d(new Translation2d(), getWristAngle()));
         var handEndPose = handPose.transformBy(
             new Transform2d(new Translation2d(HAND_LENGTH, 0), new Rotation2d())
         );
@@ -75,13 +79,14 @@ public class ArmS extends SubsystemBase implements Loggable {
     public void simulationPeriodic() {
         extendSimulationPeriodic();
         pivotSimulationPeriodic();
+        wristSimulationPeriodic();
         
     }
 
     public Transform3d getGamePieceTransform() {
         var pivotPose = new Pose2d(ARM_PIVOT_TRANSLATION, getAngle());
         var wristPose = pivotPose.transformBy(
-            new Transform2d(new Translation2d(getLengthMeters(), 0), new Rotation2d())
+            new Transform2d(new Translation2d(getLengthMeters(), 0), getWristAngle())
         );
         var piecePose = wristPose.transformBy(new Transform2d(new Translation2d(HAND_LENGTH / 2, 0), new Rotation2d()));
         var transform3d = new Transform3d(
@@ -221,7 +226,6 @@ public class ArmS extends SubsystemBase implements Loggable {
         m_pivotSim.setState(VecBuilder.fill(armStartAngle,0));
 
         m_pivotController.reset(armStartAngle);
-        m_pivotController.enableContinuousInput(-Math.PI, Math.PI);
         m_pivotController.setTolerance(0.05, 0.05);
 
         pivotS.setDefaultCommand(followTargetC());
@@ -232,12 +236,12 @@ public class ArmS extends SubsystemBase implements Loggable {
         m_pivotFeedForward = new LinearPlantInversionFeedforward<>(m_pivotPlant, 0.02);
     }
     private void pivotSimulationPeriodic() {
-        m_pivotSim.setCGRadius(getLengthMeters() / 2);
-        m_pivotSim.setMOI(getPivotMOI());
-        m_pivotSim.setInputVoltage(m_pivotMotor.getAppliedOutput());
-        m_pivotSim.update(0.02);
-        m_pivotEncoderWrapper.setSimPosition(m_pivotSim.getAngleRads());
-        m_pivotEncoderWrapper.setSimVelocity(m_pivotSim.getVelocityRadPerSec());
+            m_pivotSim.setCGRadius(getLengthMeters() / 2);
+            m_pivotSim.setMOI(getPivotMOI());
+            m_pivotSim.setInputVoltage(DriverStation.isEnabled() ? m_pivotMotor.getAppliedOutput() : 0);
+            m_pivotSim.update(0.02);
+            m_pivotEncoderWrapper.setSimPosition(m_pivotSim.getAngleRads());
+            m_pivotEncoderWrapper.setSimVelocity(m_pivotSim.getVelocityRadPerSec());
     }
 
     public void setPivotVolts(double volts) {
@@ -272,6 +276,13 @@ public class ArmS extends SubsystemBase implements Loggable {
     }
 
     public void setPivotAngle(double targetAngle) {
+        // We need to convert this to -90 to 270.
+        // We don't want continuous input, but we need the rollover point to be outside our range of motion.
+        targetAngle = MathUtil.angleModulus(targetAngle);
+        // now in range -180 to 180
+        if (targetAngle <= -Math.PI/2) {
+            targetAngle += 2 * Math.PI;
+        }
         SmartDashboard.putNumber("armRequestAngle", targetAngle);
         var outputVelocity = m_pivotController.calculate(
             getAngle().getRadians(),
@@ -308,15 +319,105 @@ public class ArmS extends SubsystemBase implements Loggable {
     }
     // endregion
 
+    // region wrist
+    private final Subsystem wristS = new Subsystem() {};
+    private final double wristMOI = HAND_MASS_KG * HAND_LENGTH * HAND_LENGTH / 3.0;
+    private final CANSparkMax m_wristMotor = new CANSparkMax(WRIST_MOTOR_ID,MotorType.kBrushless);
+    private final LinearSystem<N2, N1, N1> m_wristPlant = LinearSystemId.createSingleJointedArmSystem(
+        DCMotor.getNEO(1), wristMOI, 1.0/WRIST_ROTATIONS_PER_MOTOR_ROTATION);
+    private final VariableLengthArmSim m_wristSim = new VariableLengthArmSim(
+        m_wristPlant,
+        DCMotor.getNEO(1),
+        1.0 / WRIST_ROTATIONS_PER_MOTOR_ROTATION,
+        wristMOI, HAND_LENGTH,
+        WRIST_MIN_ANGLE, WRIST_MAX_ANGLE, HAND_MASS_KG, true);
+    private final LinearPlantInversionFeedforward<N2, N1, N1> m_wristFeedforward
+        = new LinearPlantInversionFeedforward<>(m_wristPlant, 0.02);
+    
+    private final SparkMaxEncoderWrapper m_wristEncoderWrapper = new SparkMaxEncoderWrapper(m_wristMotor);
+    private final ProfiledPIDController m_wristController = new ProfiledPIDController(
+        1, 0, 0, new Constraints(4, 4));
+
+    public void initWrist() {
+        m_wristMotor.getEncoder().setPositionConversionFactor(WRIST_ROTATIONS_PER_MOTOR_ROTATION);
+        m_wristMotor.getEncoder().setVelocityConversionFactor(WRIST_ROTATIONS_PER_MOTOR_ROTATION / 60);
+        m_wristMotor.setSoftLimit(SoftLimitDirection.kForward, (float) WRIST_MAX_ANGLE);
+        m_wristMotor.setSoftLimit(SoftLimitDirection.kReverse, (float) WRIST_MIN_ANGLE);
+
+        m_wristEncoderWrapper.setPosition(0);
+        m_wristSim.setState(VecBuilder.fill(0,0));
+        //as the arm raises from 0 to pi/2, the gravity on the wrist goes from -pi/2 to -pi
+        m_wristSim.setGravityAngle(-Math.PI/2 - getAngle().getRadians());
+
+        m_wristController.reset(0);
+        m_wristController.setTolerance(0.05, 0.05);
+    }
+
+    public void wristSimulationPeriodic() {
+        m_wristSim.setGravityAngle(-Math.PI/2 - getAngle().getRadians());
+
+        m_wristSim.setInputVoltage(DriverStation.isEnabled() ? m_wristMotor.getAppliedOutput() : 0);
+        m_wristSim.update(0.02);
+        m_wristEncoderWrapper.setSimPosition(m_wristSim.getAngleRads());
+        m_wristEncoderWrapper.setSimVelocity(m_wristSim.getVelocityRadPerSec());
+
+    }
+
+    @Log(methodName="getRadians")
+    public Rotation2d getWristAngle() {
+        return Rotation2d.fromRadians(m_wristEncoderWrapper.getPosition());
+    }
+
+    public double getWristVelocity() {
+        return m_wristEncoderWrapper.getVelocity();
+    }
+
+    public void setWristVelocity(double velocityRadPerSec) {
+        m_wristMotor.setVoltage(
+            m_wristFeedforward.calculate(VecBuilder.fill(0, velocityRadPerSec)).get(0, 0)
+            + getWristkGVolts()
+
+        );
+    }
+
+    public void setWristVolts(double volts) {
+        m_wristMotor.setVoltage(volts);
+    }
+
+    public double getWristkGVolts() {
+        // angle relative to world horizontal
+        // = pivot angle + wrist angle
+        return WRIST_KG * Math.cos(getAngle().plus(getWristAngle()).getRadians());
+    }
+
+    public void setWristAngle(double targetAngle) {
+        targetAngle = MathUtil.angleModulus(targetAngle);
+        setWristVelocity(
+            m_wristController.calculate(
+                getWristAngle().getRadians(), targetAngle
+            ) + m_wristController.getSetpoint().velocity
+        );
+    }
+
+    public Command holdWristC() {
+        return wristS.run(()->setWristVolts(getWristkGVolts()));
+    }
+    // endregion
+
     // region factories
     public Command followTargetC() {
         return Commands.run(()->{
-            var offset = VISUALIZER.getObject("2_target").getPose().getTranslation();
+            var targetPose = VISUALIZER.getObject("2_target").getPose();
+            var wristTargetPose = targetPose.transformBy(new Transform2d(
+                new Translation2d(-HAND_LENGTH, 0),
+                new Rotation2d()));
+            var offset = wristTargetPose.getTranslation();
             offset = new Translation2d(offset.getX(), offset.getY() - Units.inchesToMeters(25));
             setPivotAngle(offset.getAngle().getRadians());
             setExtendLength(offset.getNorm());
+            setWristAngle(-getAngle().getRadians() + targetPose.getRotation().getRadians());
         },
-        extendS, pivotS);
+        extendS, pivotS, wristS);
     }
 
     // endregion
