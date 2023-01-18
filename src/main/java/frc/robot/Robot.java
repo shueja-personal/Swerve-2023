@@ -1,6 +1,7 @@
 package frc.robot;
 
 import edu.wpi.first.math.kinematics.SwerveModuleState;
+import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.livewindow.LiveWindow;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -20,7 +21,7 @@ public class Robot extends TimedRobot {
         LiveWindow.disableAllTelemetry();
         robotContainer = new RobotContainer();
         Logger.configureLoggingAndConfig(robotContainer, false);
-        SmartDashboard.putNumber("vel", new SwerveModuleState().speedMetersPerSecond);
+       
     }
 
     @Override
@@ -29,6 +30,7 @@ public class Robot extends TimedRobot {
         CommandScheduler.getInstance().run();
         robotContainer.periodic();
         Logger.updateEntries();
+        NetworkTableInstance.getDefault().flush();
         
     }
 
